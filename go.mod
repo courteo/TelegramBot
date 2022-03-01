@@ -1,4 +1,4 @@
-module gitlab.com/mailru-go/lectures-2021-2
+module gitlab.com/mailru-go/lectures-2022-1
 
 go 1.15
 

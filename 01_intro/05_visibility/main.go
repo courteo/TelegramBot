@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"gitlab.com/mailru-go/lectures-2021-2/1/05_visibility/person"
+	"gitlab.com/mailru-go/lectures-2022-1/01_intro/05_visibility/person"
 )
 
 func main() {

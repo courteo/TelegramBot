@@ -59,6 +59,6 @@
 
 ```bash
 # будучи в своём репозитории
-git pull https://gitlab.com/mailru-go/lectures-2021-2.git master
+git pull https://gitlab.com/mailru-go/lectures-2022-1.git master
 git push origin master
 ```
