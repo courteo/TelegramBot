@@ -59,6 +59,13 @@
 
 ```bash
 # будучи в своём репозитории
+
+# либо склонить через https
 git pull https://gitlab.com/mailru-go/lectures-2022-1.git master
+
+# либо склонить через ssh
+git pull git@gitlab.com:mailru-go/lectures-2022-1.git master
+
+# а потом запушить изменения к себе
 git push origin master
 ```

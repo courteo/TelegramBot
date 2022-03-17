@@ -5,8 +5,8 @@ import "fmt"
 func main() {
 	// инициализация при создании
 	var user map[string]string = map[string]string{
-		"name":     "Vasily",
-		"lastName": "Romanov",
+		"name":     "Anton",
+		"lastName": "Sulaev",
 	}
 
 	// сразу с нужной ёмкостью
