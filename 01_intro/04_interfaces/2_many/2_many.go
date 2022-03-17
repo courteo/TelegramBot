@@ -57,8 +57,6 @@ type Payer interface {
 	Pay(int) error
 }
 
-// --------------
-
 func Buy(p Payer) {
 	err := p.Pay(10)
 	if err != nil {

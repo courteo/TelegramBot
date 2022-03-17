@@ -13,10 +13,12 @@ func main() {
 	var bigInt int64 = 1<<32 - 1
 
 	// платформозависимый тип, 32/64
-	var unsignedInt uint = 100500
+	var unsignedInt uint = 123
 
 	// uint8, unit16, uint32, unit64
 	var unsignedBigInt uint64 = 1<<64 - 1
+	unsignedBigInt = 0x01fe
+	unsignedBigInt = 0b00001010101
 
 	fmt.Println(i, autoInt, bigInt, unsignedInt, unsignedBigInt)
 
@@ -30,7 +32,7 @@ func main() {
 	// bool
 	var b bool // false по-умолчанию
 	var isOk bool = true
-	var success = true
+	var success = false
 	cond := true
 
 	fmt.Println(b, isOk, success, cond)
