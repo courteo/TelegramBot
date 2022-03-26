@@ -201,7 +201,7 @@ func TestTasks(t *testing.T) {
 	}()
 
 	// give server time to start
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	cases := []testCase{
 		{
