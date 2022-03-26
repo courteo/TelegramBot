@@ -12,7 +12,7 @@ import (
 	// "encoding/json"
 	"fmt"
 
-	tgbotapi "github.com/skinass/telegram-bot-api"
+	tgbotapi "github.com/skinass/telegram-bot-api/v5"
 
 	// "io/ioutil"
 	"net/http"
