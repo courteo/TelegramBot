@@ -67,7 +67,7 @@ func (srv *TDS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		srv.Unlock()
 
 		//nolint:errcheck
-		w.Write([]byte(`{"ok":true}`))
+		w.Write([]byte(`{"ok":true, "result":{"MessageID": 0}}`))
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -226,6 +226,13 @@ func TestTasks(t *testing.T) {
 			map[int64]string{
 				Ivanov: `1. написать бота by @ivanov
 /assign_1`,
+			},
+		},
+		{
+			Ivanov,
+			"/assign_1",
+			map[int64]string{
+				Ivanov: `Задача "написать бота" назначена на вас`,
 			},
 		},
 		{
