@@ -39,21 +39,21 @@ func TestBadType(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(SearchServer))
 
 	params := GetParams("qwe", "eas", "q", "s", "swq")
-	searcherReq, err := http.NewRequest("GET", ts.URL+"?"+params.Encode(), nil) //nolint:errcheck
+	searcherReq, err := http.NewRequest("GET", ts.URL+"?"+params.Encode(), nil)
 	if err != nil {
 		fmt.Errorf("wrong request")
 	}
 	searcherReq.Header.Add("AccessToken", "123321213321")
 
 	params1 := GetParams("12", "2", "qWqqqqq", "Name", "1q2")
-	searcherReq1, err := http.NewRequest("GET", ts.URL+"?"+params1.Encode(), nil) //nolint:errcheck
+	searcherReq1, err := http.NewRequest("GET", ts.URL+"?"+params1.Encode(), nil)
 	if err != nil {
 		fmt.Errorf("wrong request")
 	}
 	searcherReq1.Header.Add("AccessToken", "123321213321")
 
 	params2 := GetParams("12", "we", "q", "Name", "1q2")
-	searcherReq2, err := http.NewRequest("GET", ts.URL+"?"+params2.Encode(), nil) //nolint:errcheck
+	searcherReq2, err := http.NewRequest("GET", ts.URL+"?"+params2.Encode(), nil)
 	if err != nil {
 		fmt.Errorf("wrong request")
 	}
