@@ -110,9 +110,9 @@ func TestSigner(t *testing.T) {
 				out <- fibNum
 			}
 		}),
-		job(SingleHash),
-		job(MultiHash),
-		job(CombineResults),
+		// job(SingleHash),
+		// job(MultiHash),
+		// job(CombineResults),
 		job(func(in, out chan interface{}) {
 			dataRaw := <-in
 			data, ok := dataRaw.(string)
