@@ -5,17 +5,14 @@ package main
 // https://api.telegram.org/bot5244227470:AAEModcsPOS8TxZehTmFoTwH5Kr3mctcMv0/getUpdates
 
 import (
-	//"gopkg.in/telegram-bot-api.v4"
 	"context"
 	"fmt"
 	tgbotapi "github.com/skinass/telegram-bot-api/v5"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 var (
@@ -49,16 +46,6 @@ func IsTaskContain(TaskName string) bool {
 	return false
 }
 
-func GetIndexOfUser(UserName string) (int, error) {
-	for i, user := range AllUsers {
-		if user.UserName == UserName {
-			return i, nil
-		}
-	}
-	err := fmt.Errorf("нет пользователя")
-	return -1, err
-}
-
 func GetUserId(UserName string) (int, error) {
 	for i, user := range AllUsers {
 		if user.UserName == UserName {
@@ -81,19 +68,19 @@ func GetUser(UserName string) (User, error) {
 
 type User struct {
 	UserName     string
-	CreatedTasks []Task // Которые он создал
-	UserTasks    []Task // Которые ему задали
+	CreatedTasks []int // Которые он создал
+	UserTasks    []int // Которые ему задали
 	ChatId       int64
 }
 
 func (user *User) AddNewTask(NewTask Task) {
-	user.CreatedTasks = append(user.CreatedTasks, NewTask)
+	user.CreatedTasks = append(user.CreatedTasks, NewTask.Id)
 }
 
-func (user *User) DeleteTask(taskName string) {
+func (user *User) DeleteTask(taskName int) {
 	index := -1
 	for i, task := range user.UserTasks {
-		if task.Name == taskName {
+		if task == taskName {
 			index = i
 			break
 		}
@@ -103,10 +90,10 @@ func (user *User) DeleteTask(taskName string) {
 	}
 }
 
-func (user *User) DeleteCreatedTask(taskName string) {
+func (user *User) DeleteCreatedTask(taskName int) {
 	index := -1
 	for i, task := range user.CreatedTasks {
-		if task.Name == taskName {
+		if task == taskName {
 			index = i
 			break
 		}
@@ -116,9 +103,9 @@ func (user *User) DeleteCreatedTask(taskName string) {
 	}
 }
 
-func (user User) IsUserHasTask(TaskName string) bool {
+func (user User) IsUserHasTask(TaskName int) bool {
 	for _, userTask := range user.UserTasks {
-		if userTask.Name == TaskName {
+		if userTask == TaskName {
 			return true
 		}
 	}
@@ -126,23 +113,23 @@ func (user User) IsUserHasTask(TaskName string) bool {
 }
 
 type Task struct {
-	Name    string
-	Owner   string
-	Creator string
-	Id      int
+	Name     string
+	Assignee string
+	Creator  string
+	Id       int
 }
 
-func PrintTaskWithOwner(CurrTask Task) string {
+func PrintTaskWithAssignee(CurrTask Task) string {
 	return strconv.Itoa(CurrTask.Id) + ". " + CurrTask.Name + " by @" + CurrTask.Creator + "\n" +
 		"/unassign_" + strconv.Itoa(CurrTask.Id) + " /resolve_" + strconv.Itoa(CurrTask.Id)
 }
 
-func PrintTaskWithoutOwner(CurrTask Task) string {
+func PrintTaskWithoutAssignee(CurrTask Task) string {
 	return strconv.Itoa(CurrTask.Id) + ". " + CurrTask.Name + " by @" + CurrTask.Creator + "\n" +
 		"/assign_" + strconv.Itoa(CurrTask.Id)
 }
 
-func NewTask(TaskName string, Owner User) (res string) {
+func NewTask(TaskName string, Creator User) (res string) {
 	if TaskName == "" {
 		return "Название задачи не может быть пустой"
 	}
@@ -154,17 +141,17 @@ func NewTask(TaskName string, Owner User) (res string) {
 	Inc++
 	newTask := Task{
 		Name:    TaskName,
-		Creator: Owner.UserName,
+		Creator: Creator.UserName,
 		Id:      Inc,
 	}
-	Owner.AddNewTask(newTask)
+	Creator.AddNewTask(newTask)
 	AllTasks = append(AllTasks, newTask)
 
-	index, err := GetIndexOfUser(Owner.UserName)
+	index, err := GetUserId(Creator.UserName)
 	if err == nil {
 		AllUsers = append(AllUsers[:index], AllUsers[index+1:]...)
 	}
-	AllUsers = append(AllUsers, Owner)
+	AllUsers = append(AllUsers, Creator)
 
 	//fmt.Println(AllUsers)
 	return "Задача \"" + TaskName + "\" создана, id=" + strconv.Itoa(Inc)
@@ -172,7 +159,12 @@ func NewTask(TaskName string, Owner User) (res string) {
 
 func MyTask(user User) (res string) {
 	for i, userTask := range user.UserTasks {
-		res += PrintTaskWithOwner(userTask)
+		task, err := GetTaskId(userTask)
+		if err != nil {
+			return "нет такой задачи"
+		}
+
+		res += PrintTaskWithAssignee(AllTasks[task])
 		if i != len(user.UserTasks)-1 {
 			res += "\n"
 		}
@@ -189,11 +181,16 @@ func OwnerTask(user User) (res string) {
 	}
 
 	for i, userTask := range user.CreatedTasks {
+		taskId, err := GetTaskId(userTask)
+		if err != nil {
+			return "нет такой задачи"
+		}
+
 		//fmt.Println("Task ", userTask)
-		if userTask.Owner != "" {
-			res += PrintTaskWithOwner(userTask)
+		if AllTasks[taskId].Assignee != "" {
+			res += PrintTaskWithAssignee(AllTasks[taskId])
 		} else {
-			res += PrintTaskWithoutOwner(userTask)
+			res += PrintTaskWithoutAssignee(AllTasks[taskId])
 		}
 
 		if i != (len(user.CreatedTasks) - 1) {
@@ -211,29 +208,26 @@ func Assign(user User, id int) (res []string, chatId []int64, err error) {
 		return []string{}, []int64{}, err
 	}
 
-	if AllTasks[taskId].Owner != "" {
-		userId, errorUserID := GetUserId(AllTasks[taskId].Owner)
+	if AllTasks[taskId].Assignee != "" || AllTasks[taskId].Creator != user.UserName {
+		var userId int
+		var errorUserID error
+
+		if AllTasks[taskId].Assignee != "" {
+			userId, errorUserID = GetUserId(AllTasks[taskId].Assignee)
+		} else {
+			userId, errorUserID = GetUserId(AllTasks[taskId].Creator)
+		}
+
 		if errorUserID != nil {
 			return []string{}, []int64{}, errorUserID
 		}
 
-		AllUsers[userId].DeleteTask(AllTasks[taskId].Name)
-		str := "Задача \"" + AllTasks[taskId].Name + "\" назначена на @" + user.UserName // сообщение новому владельцу задачи
-		res = append(res, str)
-		chatId = append(chatId, AllUsers[userId].ChatId)
-	} else if AllTasks[taskId].Creator != user.UserName {
-		userId, errorUserID := GetUserId(AllTasks[taskId].Creator)
-		if errorUserID != nil {
-			return []string{}, []int64{}, errorUserID
-		}
-
-		AllUsers[userId].DeleteTask(AllTasks[taskId].Name)
+		AllUsers[userId].DeleteTask(AllTasks[taskId].Id)
 		str := "Задача \"" + AllTasks[taskId].Name + "\" назначена на @" + user.UserName // сообщение новому владельцу задачи
 		res = append(res, str)
 		chatId = append(chatId, AllUsers[userId].ChatId)
 	}
-
-	AllTasks[taskId].Owner = user.UserName
+	AllTasks[taskId].Assignee = user.UserName
 
 	userId, errorUserID := GetUserId(user.UserName)
 	if errorUserID != nil {
@@ -241,8 +235,8 @@ func Assign(user User, id int) (res []string, chatId []int64, err error) {
 		return []string{}, []int64{}, err
 	}
 
-	if !user.IsUserHasTask(AllTasks[taskId].Name) {
-		AllUsers[userId].UserTasks = append(AllUsers[userId].UserTasks, AllTasks[taskId])
+	if !user.IsUserHasTask(AllTasks[taskId].Id) {
+		AllUsers[userId].UserTasks = append(AllUsers[userId].UserTasks, AllTasks[taskId].Id)
 	}
 
 	str := "Задача \"" + AllTasks[taskId].Name + "\" назначена на вас" // сообщение новому владельцу задачи
@@ -259,19 +253,19 @@ func UnAssign(user User, id int) (res []string, chatId []int64, err error) {
 		return []string{}, []int64{}, err
 	}
 
-	if !user.IsUserHasTask(AllTasks[taskId].Name) {
+	if !user.IsUserHasTask(AllTasks[taskId].Id) {
 		res = append(res, "Задача не на вас")
 		chatId = append(chatId, user.ChatId)
 		return res, chatId, nil
 	}
 
-	AllTasks[taskId].Owner = ""
+	AllTasks[taskId].Assignee = ""
 	userId, errorUserID := GetUserId(user.UserName)
 	if errorUserID != nil {
 		return []string{}, []int64{}, errorUserID
 	}
 
-	AllUsers[userId].DeleteTask(AllTasks[taskId].Name)
+	AllUsers[userId].DeleteTask(AllTasks[taskId].Id)
 	str := "Принято" // сняли задачу с пользователя
 	res = append(res, str)
 	chatId = append(chatId, AllUsers[userId].ChatId)
@@ -281,7 +275,7 @@ func UnAssign(user User, id int) (res []string, chatId []int64, err error) {
 		return []string{}, []int64{}, errorUserID
 	}
 
-	AllUsers[userId].DeleteTask(AllTasks[taskId].Name)
+	AllUsers[userId].DeleteTask(AllTasks[taskId].Id)
 	str = "Задача \"" + AllTasks[taskId].Name + "\" осталась без исполнителя" // сообщение автору задачи
 
 	res = append(res, str)
@@ -296,28 +290,28 @@ func Resolve(user User, id int) (res []string, chatId []int64, err error) {
 		return []string{}, []int64{}, err
 	}
 
-	owner, errorUser := GetUserId(AllTasks[taskId].Owner)
+	Assignee, errorUser := GetUserId(AllTasks[taskId].Assignee)
 	if errorUser != nil {
 		errorUser = fmt.Errorf("Нет пользователя, которому задали эту задачу")
 		return []string{}, []int64{}, errorUser
 	}
 
-	if AllUsers[owner].UserName != user.UserName {
+	if AllUsers[Assignee].UserName != user.UserName {
 		err = fmt.Errorf("у вас нет доступка к этому")
 		return []string{}, []int64{}, err
 	}
-	AllUsers[owner].DeleteTask(AllTasks[taskId].Name) // удаляем задачу у исполнителя
+	AllUsers[Assignee].DeleteTask(AllTasks[taskId].Id) // удаляем задачу у исполнителя
 	str := "Задача \"" + AllTasks[taskId].Name + "\" выполнена"
 	res = append(res, str)
-	chatId = append(chatId, AllUsers[owner].ChatId)
+	chatId = append(chatId, AllUsers[Assignee].ChatId)
 
 	creator, errorUser := GetUserId(AllTasks[taskId].Creator)
 	if errorUser != nil {
 		return []string{}, []int64{}, errorUser
 	}
 
-	AllUsers[creator].DeleteCreatedTask(AllTasks[taskId].Name) // удаляем задачу у создателя
-	str = "Задача \"" + AllTasks[taskId].Name + "\" выполнена @" + AllUsers[owner].UserName
+	AllUsers[creator].DeleteCreatedTask(AllTasks[taskId].Id) // удаляем задачу у создателя
+	str = "Задача \"" + AllTasks[taskId].Name + "\" выполнена @" + AllUsers[Assignee].UserName
 	res = append(res, str)
 	chatId = append(chatId, AllUsers[creator].ChatId)
 
@@ -334,12 +328,12 @@ func PrintAllTasks(user User) (res string, err error) {
 
 	for i, task := range AllTasks {
 		str := strconv.Itoa(task.Id) + ". " + task.Name + " by @" + task.Creator + "\n"
-		if task.Owner != "" { // задачу кто-то взял
-			if task.Owner == user.UserName {
+		if task.Assignee != "" { // задачу кто-то взял
+			if task.Assignee == user.UserName {
 				str += "assignee: я\n"
 				str += "/unassign_" + strconv.Itoa(task.Id) + " /resolve_" + strconv.Itoa(task.Id)
 			} else {
-				str += "assignee: @" + task.Owner
+				str += "assignee: @" + task.Assignee
 			}
 
 		} else { // задачу никто не взял
@@ -369,26 +363,16 @@ func BotSend(bot tgbotapi.BotAPI, currUser User, taskId int, update tgbotapi.Upd
 	if err != nil {
 		bot.Send(tgbotapi.NewMessage(
 			update.Message.Chat.ID,
-			err.Error(),
+			"нет такой задачи",
 		))
 		return
 	}
 	//fmt.Println(msgs, chatId)
-	if len(msgs) == 2 {
-		bot.Send(tgbotapi.NewMessage(
-			chatId[0],
-			msgs[0],
-		))
 
+	for i := range msgs {
 		bot.Send(tgbotapi.NewMessage(
-			chatId[1],
-			msgs[1],
-		))
-
-	} else {
-		bot.Send(tgbotapi.NewMessage(
-			chatId[0],
-			msgs[0],
+			chatId[i],
+			msgs[i],
 		))
 	}
 }
@@ -404,8 +388,79 @@ func Help(bot tgbotapi.BotAPI, currUser User, update tgbotapi.Update) {
 	))
 }
 
+func ForCommand(bot tgbotapi.BotAPI, currUser User, update tgbotapi.Update) {
+	var msg, command, body string
+	var taskId int
+	index := strings.Index(update.Message.Text, " ")
+
+	if index != -1 {
+		command = update.Message.Text[1:index]
+		body = update.Message.Text[index+1:]
+
+	} else {
+		command = update.Message.Text[1:]
+		taskIdTemp := strings.Index(command, "_")
+
+		if taskIdTemp != -1 {
+			taskId, _ = strconv.Atoi(command[taskIdTemp+1:])
+			command = command[:taskIdTemp]
+		}
+	}
+
+	switch command {
+	case "new":
+		msg = NewTask(body, currUser)
+		bot.Send(tgbotapi.NewMessage(
+			update.Message.Chat.ID,
+			msg,
+		))
+	case "my":
+		msg = MyTask(currUser)
+		bot.Send(tgbotapi.NewMessage(
+			update.Message.Chat.ID,
+			msg,
+		))
+	case "owner":
+		msg = OwnerTask(currUser)
+		bot.Send(tgbotapi.NewMessage(
+			update.Message.Chat.ID,
+			msg,
+		))
+	case "assign":
+		BotSend(bot, currUser, taskId, update, "assign")
+	case "unassign":
+		BotSend(bot, currUser, taskId, update, "unassign")
+	case "resolve":
+		BotSend(bot, currUser, taskId, update, "resolve")
+	case "tasks":
+		msg, err := PrintAllTasks(currUser)
+		if err != nil {
+			msg = err.Error()
+		}
+
+		bot.Send(tgbotapi.NewMessage(
+			update.Message.Chat.ID,
+			msg,
+		))
+	case "start":
+		bot.Send(tgbotapi.NewMessage(
+			update.Message.Chat.ID,
+			"Введите /help"))
+	case "help":
+		Help(bot, currUser, update)
+	default:
+		msg = "none"
+	}
+
+	if msg == "none" {
+		bot.Send(tgbotapi.NewMessage(
+			update.Message.Chat.ID,
+			"Команды не существует",
+		))
+	}
+}
+
 func startTaskBot(ctx context.Context) error {
-	rand.Seed(time.Now().UnixNano())
 	bot, err := tgbotapi.NewBotAPI(BotToken)
 	if err != nil {
 		log.Fatalf("NewBotAPI failed: %s", err)
@@ -441,6 +496,10 @@ func startTaskBot(ctx context.Context) error {
 
 	// получаем все обновления из канала updates
 	for update := range updates {
+		if update.Message == nil {
+			continue
+		}
+
 		currUser, err := GetUser(update.Message.From.UserName)
 		if err != nil {
 			currUser = User{UserName: update.Message.From.UserName, ChatId: update.Message.Chat.ID}
@@ -448,81 +507,7 @@ func startTaskBot(ctx context.Context) error {
 		}
 
 		if update.Message.IsCommand() {
-			var msg, command, body string
-			var taskId int
-			index := strings.Index(update.Message.Text, " ")
-
-			if index != -1 {
-				command = update.Message.Text[1:index]
-				body = update.Message.Text[index+1:]
-
-			} else {
-				command = update.Message.Text[1:]
-
-				taskIdTemp := strings.Index(command, "_")
-
-				//fmt.Println("ASSIGN  ", taskIdTemp, command)
-				if taskIdTemp != -1 {
-					taskId, _ = strconv.Atoi(command[taskIdTemp+1:])
-					command = command[:taskIdTemp]
-					//fmt.Println("ASSIGN  ", taskIdTemp, command)
-
-				}
-				//fmt.Println("ASSIGN  ", taskId, command)
-			}
-
-			switch command {
-			case "new":
-				msg = NewTask(body, currUser)
-				bot.Send(tgbotapi.NewMessage(
-					update.Message.Chat.ID,
-					msg,
-				))
-			case "my":
-				msg = MyTask(currUser)
-				bot.Send(tgbotapi.NewMessage(
-					update.Message.Chat.ID,
-					msg,
-				))
-			case "owner":
-				msg = OwnerTask(currUser)
-				bot.Send(tgbotapi.NewMessage(
-					update.Message.Chat.ID,
-					msg,
-				))
-			case "assign":
-				BotSend(*bot, currUser, taskId, update, "assign")
-			case "unassign":
-				BotSend(*bot, currUser, taskId, update, "unassign")
-			case "resolve":
-				BotSend(*bot, currUser, taskId, update, "resolve")
-			case "tasks":
-				msg, err := PrintAllTasks(currUser)
-				if err != nil {
-					msg = err.Error()
-				}
-
-				bot.Send(tgbotapi.NewMessage(
-					update.Message.Chat.ID,
-					msg,
-				))
-			case "start":
-				bot.Send(tgbotapi.NewMessage(
-					update.Message.Chat.ID,
-					"Введите /help"))
-			case "help":
-				Help(*bot, currUser, update)
-			default:
-				msg = "none"
-			}
-
-			if msg == "none" {
-				bot.Send(tgbotapi.NewMessage(
-					update.Message.Chat.ID,
-					"Команды не существует",
-				))
-			}
-
+			ForCommand(*bot, currUser, update)
 		} else {
 			bot.Send(tgbotapi.NewMessage(
 				update.Message.Chat.ID,
